@@ -1,0 +1,6 @@
+{
+    "name": "samszo/wikidata-explorer",
+    "require": {
+        "jeroen/json-dump-reader": "^2.0"
+    }
+}

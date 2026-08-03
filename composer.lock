@@ -1,0 +1,542 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "154f339c2f28456e520f479e7471671f",
+    "packages": [
+        {
+            "name": "data-values/data-values",
+            "version": "3.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/DataValues/DataValues.git",
+                "reference": "45aca708da1f7d39c4fca9e6c7373404627e083b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/DataValues/DataValues/zipball/45aca708da1f7d39c4fca9e6c7373404627e083b",
+                "reference": "45aca708da1f7d39c4fca9e6c7373404627e083b",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.2.0"
+            },
+            "replace": {
+                "mediawiki/data-values": "*"
+            },
+            "require-dev": {
+                "mediawiki/mediawiki-codesniffer": "^38",
+                "phpunit/phpunit": "~8.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "3.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "DataValues\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "email": "jeroendedauw@gmail.com",
+                    "homepage": "http://jeroendedauw.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Defines the DataValue interface and some trivial implementations",
+            "homepage": "https://github.com/DataValues/DataValues",
+            "keywords": [
+                "datavalues",
+                "wikibase",
+                "wikidata"
+            ],
+            "support": {
+                "issues": "https://github.com/DataValues/DataValues/issues",
+                "source": "https://github.com/DataValues/DataValues/tree/3.1.1"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/JeroenDeDauw",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-02-04T13:26:44+00:00"
+        },
+        {
+            "name": "data-values/serialization",
+            "version": "1.2.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/DataValues/Serialization.git",
+                "reference": "b31b3af537a3ac9f3b70f42cc03f2221c6fd8fd7"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/DataValues/Serialization/zipball/b31b3af537a3ac9f3b70f42cc03f2221c6fd8fd7",
+                "reference": "b31b3af537a3ac9f3b70f42cc03f2221c6fd8fd7",
+                "shasum": ""
+            },
+            "require": {
+                "data-values/data-values": "~3.0|~2.0|~1.0|~0.1",
+                "php": ">=7.2",
+                "serialization/serialization": "~4.0|~3.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "~8.5",
+                "wikibase/wikibase-codesniffer": "^1.2.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.2.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "DataValues\\Serializers\\": "src/Serializers",
+                    "DataValues\\Deserializers\\": "src/Deserializers"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "email": "jeroendedauw@gmail.com",
+                    "homepage": "http://jeroendedauw.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Serializers and deserializers for DataValue implementations",
+            "homepage": "https://github.com/DataValues/Serialization",
+            "keywords": [
+                "datavalues",
+                "deserializers",
+                "serialization",
+                "serializers",
+                "wikidata"
+            ],
+            "support": {
+                "irc": "irc://irc.freenode.net/wikidata",
+                "issues": "https://github.com/DataValues/Serialization/issues",
+                "source": "https://github.com/DataValues/Serialization/tree/1.2.5"
+            },
+            "time": "2022-10-21T14:15:46+00:00"
+        },
+        {
+            "name": "jeroen/json-dump-reader",
+            "version": "2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/JeroenDeDauw/JsonDumpReader.git",
+                "reference": "260b37c4e595ff45fe6b54a8761bae8c65445e89"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/JeroenDeDauw/JsonDumpReader/zipball/260b37c4e595ff45fe6b54a8761bae8c65445e89",
+                "reference": "260b37c4e595ff45fe6b54a8761bae8c65445e89",
+                "shasum": ""
+            },
+            "require": {
+                "jeroen/rewindable-generator": "~1.1",
+                "php": ">=7.1",
+                "wikibase/data-model-serialization": "~1.1|~2.0"
+            },
+            "require-dev": {
+                "data-values/geo": "~3.0|~2.0",
+                "data-values/iri": "~0.1.0",
+                "data-values/number": "~0.10.0",
+                "data-values/time": "~1.0",
+                "jeroen/json-dump-data": "~1.0",
+                "jeroen/nyancat-phpunit-resultprinter": "~2.0",
+                "ockcyp/covers-validator": "~1.0",
+                "phpmd/phpmd": "~2.6",
+                "phpunit/phpunit": "~7.3",
+                "squizlabs/php_codesniffer": "~3.3"
+            },
+            "suggest": {
+                "data-values/geo": "Needed when using the EntityDocument iterator to read geographical values",
+                "data-values/iri": "Needed when using the EntityDocument iterator to read IRI values",
+                "data-values/number": "Needed when using the EntityDocument iterator to read numerical values",
+                "data-values/time": "Needed when using the EntityDocument iterator to read time values"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "2.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Wikibase\\JsonDumpReader\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "homepage": "http://jeroendedauw.com"
+                }
+            ],
+            "description": "Provides line-by-line readers and iterators for Wikibase/Wikidata JSON dumps",
+            "homepage": "https://github.com/JeroenDeDauw/JsonDumpReader",
+            "keywords": [
+                "bz2",
+                "dump",
+                "json",
+                "wikibase",
+                "wikidata"
+            ],
+            "support": {
+                "issues": "https://github.com/JeroenDeDauw/JsonDumpReader/issues",
+                "source": "https://github.com/JeroenDeDauw/JsonDumpReader/tree/master"
+            },
+            "time": "2018-08-14T01:43:11+00:00"
+        },
+        {
+            "name": "jeroen/rewindable-generator",
+            "version": "1.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/JeroenDeDauw/RewindableGenerator.git",
+                "reference": "ebac2a47e221e102958dfc41ce46e779315f67ae"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/JeroenDeDauw/RewindableGenerator/zipball/ebac2a47e221e102958dfc41ce46e779315f67ae",
+                "reference": "ebac2a47e221e102958dfc41ce46e779315f67ae",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.0"
+            },
+            "require-dev": {
+                "mediawiki/mediawiki-codesniffer": "~0.6.0",
+                "ockcyp/covers-validator": "~0.6",
+                "phpunit/phpunit": "~6.0",
+                "squizlabs/php_codesniffer": "~2.5"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.2.x-dev"
+                }
+            },
+            "autoload": {
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0+"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "homepage": "http://jeroendedauw.com"
+                }
+            ],
+            "description": "Provides a simple adapter to make generators rewindable",
+            "homepage": "https://github.com/JeroenDeDauw/RewindableGenerator",
+            "keywords": [
+                "adapter",
+                "generator",
+                "iterator",
+                "rewind",
+                "rewindable"
+            ],
+            "support": {
+                "issues": "https://github.com/JeroenDeDauw/RewindableGenerator/issues",
+                "source": "https://github.com/JeroenDeDauw/RewindableGenerator/tree/master"
+            },
+            "time": "2017-05-16T01:01:37+00:00"
+        },
+        {
+            "name": "serialization/serialization",
+            "version": "4.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/wmde/Serialization.git",
+                "reference": "4403fbab83e0187791d35caef4eef4395811e58d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/wmde/Serialization/zipball/4403fbab83e0187791d35caef4eef4395811e58d",
+                "reference": "4403fbab83e0187791d35caef4eef4395811e58d",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.4"
+            },
+            "require-dev": {
+                "mediawiki/mediawiki-codesniffer": "^45",
+                "phpunit/phpunit": "^8.5.14"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "4.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Serializers\\": "src/Serializers/",
+                    "Deserializers\\": "src/Deserializers/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "email": "jeroendedauw@gmail.com",
+                    "homepage": "http://jeroendedauw.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Library defining a Serializer and a Deserializer interface and basic utilities",
+            "homepage": "https://github.com/wmde/Serialization",
+            "keywords": [
+                "deserialization",
+                "deserializer",
+                "serialization",
+                "serializer",
+                "unserialization",
+                "wikidata"
+            ],
+            "support": {
+                "irc": "irc://irc.freenode.net/wikidata",
+                "source": "https://github.com/wmde/Serialization/tree/4.1.0"
+            },
+            "time": "2024-12-11T14:47:31+00:00"
+        },
+        {
+            "name": "wikibase/data-model",
+            "version": "9.6.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/wmde/WikibaseDataModel.git",
+                "reference": "c2f115c119e20828f4c0946d8434f950fdab57d3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/wmde/WikibaseDataModel/zipball/c2f115c119e20828f4c0946d8434f950fdab57d3",
+                "reference": "c2f115c119e20828f4c0946d8434f950fdab57d3",
+                "shasum": ""
+            },
+            "require": {
+                "data-values/data-values": "~0.1|~1.0|~2.0|~3.0",
+                "php": "^8.0|^7.1",
+                "wikimedia/assert": "~0.2.2|~0.3.0|~0.4.0|~0.5.0"
+            },
+            "require-dev": {
+                "mediawiki/mediawiki-codesniffer": "34.0.0",
+                "ockcyp/covers-validator": "~1.1",
+                "phpmd/phpmd": "~2.6",
+                "phpunit/phpunit": "~8.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "9.6.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Wikibase\\DataModel\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Jeroen De Dauw",
+                    "email": "jeroendedauw@gmail.com",
+                    "homepage": "http://jeroendedauw.com"
+                },
+                {
+                    "name": "Thiemo Kreuz"
+                },
+                {
+                    "name": "The Wikidata team",
+                    "role": "Developer"
+                }
+            ],
+            "description": "PHP implementation of the Wikibase DataModel",
+            "homepage": "https://github.com/wmde/WikibaseDataModel",
+            "keywords": [
+                "DataModel",
+                "wikibase",
+                "wikidata"
+            ],
+            "support": {
+                "irc": "irc://irc.freenode.net/wikidata",
+                "issues": "https://github.com/wmde/WikibaseDataModel/issues",
+                "source": "https://github.com/wmde/WikibaseDataModel/tree/9.6.1"
+            },
+            "time": "2021-04-01T15:33:19+00:00"
+        },
+        {
+            "name": "wikibase/data-model-serialization",
+            "version": "2.9.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/wmde/WikibaseDataModelSerialization.git",
+                "reference": "4667670ac4976d8141b780778f43c6f8e916da1d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/wmde/WikibaseDataModelSerialization/zipball/4667670ac4976d8141b780778f43c6f8e916da1d",
+                "reference": "4667670ac4976d8141b780778f43c6f8e916da1d",
+                "shasum": ""
+            },
+            "require": {
+                "data-values/serialization": "~1.0",
+                "php": ">=5.5.9",
+                "serialization/serialization": "~4.0|~3.1",
+                "wikibase/data-model": "~9.0|~8.0|~7.0|~6.0|~5.0|~4.2"
+            },
+            "require-dev": {
+                "data-values/geo": "~4.0|~3.0",
+                "data-values/number": ">=0.1 <0.11",
+                "data-values/time": "~1.0|~0.2",
+                "phpunit/phpunit": "^4.8.35",
+                "wikibase/wikibase-codesniffer": "^0.4.1"
+            },
+            "suggest": {
+                "data-values/geo": "Needed for deserialization of geographical values",
+                "data-values/number": "Needed for deserialization of numerical values",
+                "data-values/time": "Needed for deserialization of time values"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "2.9.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Wikibase\\DataModel\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Thomas PT",
+                    "homepage": "https://github.com/Tpt"
+                },
+                {
+                    "name": "Jeroen De Dauw",
+                    "email": "jeroendedauw@gmail.com",
+                    "homepage": "http://jeroendedauw.com"
+                }
+            ],
+            "description": "Serializers and deserializers for the Wikibase DataModel",
+            "homepage": "https://github.com/wmde/WikibaseDataModelSerialization",
+            "keywords": [
+                "DataModel",
+                "deserializers",
+                "serialization",
+                "serializers",
+                "wikibase",
+                "wikidata"
+            ],
+            "support": {
+                "irc": "irc://irc.freenode.net/wikidata",
+                "issues": "https://github.com/wmde/WikibaseDataModelSerialization/issues",
+                "source": "https://github.com/wmde/WikibaseDataModelSerialization/tree/master"
+            },
+            "time": "2018-12-14T09:59:47+00:00"
+        },
+        {
+            "name": "wikimedia/assert",
+            "version": "v0.5.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/wikimedia/Assert.git",
+                "reference": "27c983fddac1197dc37f6a7cec00fc02861529cd"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/wikimedia/Assert/zipball/27c983fddac1197dc37f6a7cec00fc02861529cd",
+                "reference": "27c983fddac1197dc37f6a7cec00fc02861529cd",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.2.9"
+            },
+            "require-dev": {
+                "mediawiki/mediawiki-codesniffer": "38.0.0",
+                "mediawiki/minus-x": "1.1.1",
+                "ockcyp/covers-validator": "1.3.3",
+                "php-parallel-lint/php-console-highlighter": "0.5.0",
+                "php-parallel-lint/php-parallel-lint": "1.3.1",
+                "phpunit/phpunit": "^8.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Wikimedia\\Assert\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Daniel Kinzler"
+                },
+                {
+                    "name": "Thiemo Kreuz"
+                }
+            ],
+            "description": "Provides runtime assertions",
+            "homepage": "https://github.com/wikimedia/Assert",
+            "keywords": [
+                "assert",
+                "assertions",
+                "php",
+                "postcondition",
+                "precondition",
+                "qa"
+            ],
+            "support": {
+                "source": "https://github.com/wikimedia/Assert/tree/v0.5.1"
+            },
+            "time": "2021-12-21T11:46:59+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {},
+    "platform-dev": {},
+    "plugin-api-version": "2.6.0"
+}
