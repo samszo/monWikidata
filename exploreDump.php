@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-const TIME_LIMIT  = 1800;
+const TIME_LIMIT  = (3600*3);
 set_time_limit(TIME_LIMIT);
 
 require_once __DIR__ . '/vendor/autoload.php';
