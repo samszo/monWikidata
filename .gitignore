@@ -2,3 +2,4 @@
 wikidata-20240101-all.json.gz
 wikidata-20240101-all.json.gz-0852ef544a4694995fcbef7132477c688ded7d9a.torrent
 vendor/*
+bdd/wikidata.sql

@@ -103,18 +103,36 @@ function getDb(): PDO {
         exported_at DATETIME DEFAULT NOW()
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS wikidata_p279_graph (
-        src_id  VARCHAR(20) NOT NULL,
-        dst_id  VARCHAR(20) NOT NULL,
+        src_id      VARCHAR(20) NOT NULL,
+        dst_id      VARCHAR(20) NOT NULL,
+        exported_at DATETIME    DEFAULT NOW(),
         PRIMARY KEY (src_id, dst_id),
         INDEX idx_p279g_dst (dst_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // migrations wikidata_p279_graph : supprimer les colonnes de position devenues inutiles
+    try { $pdo->exec("ALTER TABLE wikidata_p279_graph DROP COLUMN IF EXISTS src_dump_line"); } catch (\Throwable) {}
+    try { $pdo->exec("ALTER TABLE wikidata_p279_graph DROP COLUMN IF EXISTS src_dump_pos"); } catch (\Throwable) {}
+    try { $pdo->exec("ALTER TABLE wikidata_p279_graph ADD COLUMN IF NOT EXISTS exported_at DATETIME DEFAULT NOW()"); } catch (\Throwable) {}
+    $pdo->exec("CREATE TABLE IF NOT EXISTS wikidata_p279_class (
+        id          VARCHAR(20)  NOT NULL PRIMARY KEY,
+        label       VARCHAR(500) NULL,
+        dump_line   BIGINT       DEFAULT 0,
+        dump_pos    BIGINT       DEFAULT 0,
+        exported_at DATETIME     DEFAULT NOW(),
+        updated_at  DATETIME     NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    try { $pdo->exec("ALTER TABLE wikidata_p279_class DROP COLUMN IF EXISTS p31"); } catch (\Throwable) {}
     $pdo->exec("CREATE TABLE IF NOT EXISTS wikidata_nodes (
         id          VARCHAR(20)  NOT NULL PRIMARY KEY,
         label       VARCHAR(500),
+        p31         TEXT         NULL,
         dump_line   BIGINT       DEFAULT 0,
         dump_pos    BIGINT       DEFAULT 0,
-        exported_at DATETIME     DEFAULT NOW()
+        exported_at DATETIME     DEFAULT NOW(),
+        updated_at  DATETIME     NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    try { $pdo->exec("ALTER TABLE wikidata_nodes ADD COLUMN IF NOT EXISTS p31 TEXT NULL AFTER label"); } catch (\Throwable) {}
+    try { $pdo->exec("ALTER TABLE wikidata_nodes ADD COLUMN IF NOT EXISTS updated_at DATETIME NULL AFTER exported_at"); } catch (\Throwable) {}
     try { $pdo->exec("ALTER TABLE wikidata_scan_state ADD COLUMN IF NOT EXISTS frontier_json TEXT NULL"); } catch (\Throwable) {}
     $pdo->exec("CREATE TABLE IF NOT EXISTS wikidata_scan_state (
         scan_key      VARCHAR(50)  NOT NULL PRIMARY KEY,
@@ -739,163 +757,412 @@ function countP279GraphRows(): int {
     catch (\Throwable) { return 0; }
 }
 
+function countP279ClassRows(): int {
+    try { return (int)getDb()->query("SELECT COUNT(*) FROM wikidata_p279_class")->fetchColumn(); }
+    catch (\Throwable) { return 0; }
+}
+
 function countNetworkNodes(): int {
     try { return (int)getDb()->query("SELECT COUNT(*) FROM wikidata_nodes")->fetchColumn(); }
     catch (\Throwable) { return 0; }
 }
 
-function insertNodes(array $rows): int {
-    if (empty($rows)) return 0;
-    $pdo  = getDb();
-    $stmt = $pdo->prepare("INSERT INTO wikidata_nodes (id, label, dump_line, dump_pos, exported_at)
-        VALUES (:id,:label,:dl,:dp, NOW())
-        ON DUPLICATE KEY UPDATE label=VALUES(label), dump_line=VALUES(dump_line), dump_pos=VALUES(dump_pos), exported_at=NOW()");
-    $count = 0;
-    foreach ($rows as $r) {
-        $stmt->execute([':id'=>$r['id'],':label'=>$r['label'],':dl'=>$r['dump_line'],':dp'=>$r['dump_pos']]);
-        $count++;
+// Passe 1 "initialiser" : entités avec P279 →
+//   wikidata_p279_graph(src_id, dst_id)
+//   wikidata_nodes : src complet | dst stub (id seulement)
+//   wikidata_p279_class : stubs des valeurs P31 du src (id seulement)
+function scanDumpForP279Graph(bool $resume = false): array {
+    $stateKey   = 'p279_graph';
+    $pdo        = getDb();
+    $state      = $resume ? getScanState($stateKey) : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+    $resumePos  = (int)$state['dump_position'];
+    $totalLinks = (int)$state['total_target'];
+    $totalNodes = (int)$state['found_so_far'];
+
+    if (!$resume) {
+        $pdo->exec("DELETE FROM wikidata_p279_graph");
+        $pdo->exec("DELETE FROM wikidata_p279_class");
+        $pdo->exec("DELETE FROM wikidata_nodes");
     }
-    return $count;
+
+    $factory  = new JsonDumpFactory();
+    $reader   = $factory->newGzDumpReader(DUMP_FILE);
+    if ($resumePos > 0) $reader->seekToPosition($resumePos);
+
+    $deadline   = (int)$_SERVER['REQUEST_TIME'] + TIME_LIMIT - 5;
+    $timedOut   = false;
+    $checked    = 0;
+    $BATCH      = 500;
+    $batchLinks = [];
+    $batchFull  = [];
+    $batchStubs = [];
+    $batchClass = [];
+
+    $stmtLink = $pdo->prepare(
+        "INSERT IGNORE INTO wikidata_p279_graph (src_id, dst_id, exported_at) VALUES (:sid,:did,NOW())");
+    $stmtFull = $pdo->prepare(
+        "INSERT INTO wikidata_nodes (id, label, p31, dump_line, dump_pos, exported_at)
+         VALUES (:id,:label,:p31,:dl,:dp,NOW())
+         ON DUPLICATE KEY UPDATE label=VALUES(label), p31=VALUES(p31),
+         dump_line=VALUES(dump_line), dump_pos=VALUES(dump_pos), exported_at=NOW()");
+    $stmtStub = $pdo->prepare("INSERT IGNORE INTO wikidata_nodes (id, exported_at) VALUES (:id,NOW())");
+    $stmtCls  = $pdo->prepare("INSERT IGNORE INTO wikidata_p279_class (id, exported_at) VALUES (:id,NOW())");
+
+    while (true) {
+        if (time() >= $deadline) { $timedOut = true; break; }
+
+        try { $jsonLine = $reader->nextJsonLine(); }
+        catch (\Wikibase\JsonDumpReader\DumpReadingException) { break; }
+        if ($jsonLine === null) break;
+
+        $checked++;
+        $entity = json_decode($jsonLine, true);
+        if (!is_array($entity) || ($entity['type'] ?? '') !== 'item') continue;
+        $eid = $entity['id'] ?? '';
+        if ($eid === '') continue;
+
+        $p279claims = $entity['claims']['P279'] ?? [];
+        if (empty($p279claims)) continue;
+
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) { $curPos = 0; }
+
+        $labels = $entity['labels'] ?? [];
+        $label  = $labels['fr']['value'] ?? $labels['en']['value']
+               ?? (array_values($labels)[0]['value'] ?? $eid);
+
+        $p31vals = [];
+        foreach ($entity['claims']['P31'] ?? [] as $st) {
+            $vid = $st['mainsnak']['datavalue']['value']['id'] ?? null;
+            if ($vid !== null) $p31vals[] = $vid;
+        }
+        $p31str = $p31vals ? implode('|', $p31vals) : null;
+
+        // src → nœud complet
+        $batchFull[]  = [':id'=>$eid,':label'=>$label,':p31'=>$p31str,':dl'=>$checked,':dp'=>$curPos];
+        // stubs P31 dans wikidata_p279_class
+        foreach ($p31vals as $vid) $batchClass[] = [':id'=>$vid];
+
+        foreach ($p279claims as $st) {
+            $did = $st['mainsnak']['datavalue']['value']['id'] ?? null;
+            if ($did === null) continue;
+            $batchLinks[] = [':sid'=>$eid, ':did'=>$did];
+            $batchStubs[] = [':id'=>$did]; // dst → stub
+        }
+
+        if (count($batchLinks) >= $BATCH) {
+            $pdo->beginTransaction();
+            foreach ($batchLinks as $r) $stmtLink->execute($r);
+            foreach ($batchFull  as $r) $stmtFull->execute($r);
+            foreach ($batchStubs as $r) $stmtStub->execute($r);
+            foreach ($batchClass as $r) $stmtCls->execute($r);
+            $pdo->commit();
+            $totalLinks += count($batchLinks); $totalNodes += count($batchFull);
+            $batchLinks = $batchFull = $batchStubs = $batchClass = [];
+        }
+    }
+
+    if (!empty($batchLinks) || !empty($batchFull)) {
+        $pdo->beginTransaction();
+        foreach ($batchLinks as $r) $stmtLink->execute($r);
+        foreach ($batchFull  as $r) $stmtFull->execute($r);
+        foreach ($batchStubs as $r) $stmtStub->execute($r);
+        foreach ($batchClass as $r) $stmtCls->execute($r);
+        $pdo->commit();
+        $totalLinks += count($batchLinks); $totalNodes += count($batchFull);
+    }
+
+    $curPos = 0;
+    if ($timedOut) {
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) {}
+        saveScanState($stateKey, $curPos, $totalLinks, $totalNodes);
+    } else {
+        // Synchroniser les labels des classes qui sont aussi des nœuds
+        try {
+            $pdo->exec("UPDATE wikidata_p279_class c
+                INNER JOIN wikidata_nodes n ON n.id = c.id
+                SET c.label=n.label, c.dump_line=n.dump_line, c.dump_pos=n.dump_pos, c.updated_at=NOW()
+                WHERE c.label IS NULL AND n.label IS NOT NULL");
+        } catch (\Throwable) {}
+        clearScanState($stateKey);
+    }
+
+    return ['links'=>$totalLinks,'nodes'=>$totalNodes,'checked'=>$checked,'timedOut'=>$timedOut,'done'=>!$timedOut];
 }
 
-// BFS niveau par niveau dans le dump.
-// Chaque appel reprend là où il s'est arrêté (frontier + position).
-// Un appel = autant de niveaux que le timeout le permet.
-function exploreP279Network(string $startId, bool $resume = false): array {
-    $stateKey = 'net_' . $startId;
-    $pdo      = getDb();
+// Passe 2 "compléter" : pour chaque entité du dump —
+//   si dst_id dans wikidata_p279_graph → màj wikidata_nodes + stubs P31 dans wikidata_p279_class
+//   si id dans wikidata_p279_class (label NULL) → màj label
+function scanDumpForP279Complement(bool $resume = false): array {
+    $stateKey  = 'p279_compl';
+    $pdo       = getDb();
+    $state     = $resume ? getScanState($stateKey) : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+    $resumePos = (int)$state['dump_position'];
+    $updNodes  = (int)$state['total_target'];
+    $updClass  = (int)$state['found_so_far'];
 
-    if ($resume) {
-        $state       = getScanState($stateKey);
-        $frontier    = json_decode($state['frontier_json'] ?? '[]', true) ?: [];
-        $resumePos   = (int)$state['dump_position'];
-        $totalNodes  = (int)$state['total_target'];
-        $totalLinks  = (int)$state['found_so_far'];
-    } else {
-        // Nouveau départ : vider les tables et initialiser
-        $pdo->exec("DELETE FROM wikidata_p279_graph");
-        $pdo->exec("DELETE FROM wikidata_nodes");
-        clearScanState($stateKey);
-        // Insérer le nœud de départ (label provisoire = id)
-        insertNodes([['id'=>$startId,'label'=>$startId,'dump_line'=>0,'dump_pos'=>0]]);
-        $frontier   = [$startId];
-        $resumePos  = 0;
-        $totalNodes = 1;
-        $totalLinks = 0;
-    }
-
-    // Charger les entités déjà visitées depuis la table
-    $visited = [];
+    // Stubs dst (wikidata_nodes sans label)
+    $dstSet = [];
     try {
-        $stmt = $pdo->query("SELECT id FROM wikidata_nodes");
-        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) $visited[$id] = true;
+        foreach ($pdo->query("SELECT DISTINCT dst_id FROM wikidata_p279_graph")->fetchAll(PDO::FETCH_COLUMN) as $id)
+            $dstSet[$id] = true;
     } catch (\Throwable) {}
 
-    $factory         = new JsonDumpFactory();
-    $deadline        = (int)$_SERVER['REQUEST_TIME'] + TIME_LIMIT - 5;
-    $timedOut        = false;
-    $levelsCompleted = 0;
-    $stmtLink        = $pdo->prepare("INSERT IGNORE INTO wikidata_p279_graph (src_id, dst_id) VALUES (:s,:d)");
+    // Classes sans label
+    $classSet = [];
+    try {
+        foreach ($pdo->query("SELECT id FROM wikidata_p279_class WHERE label IS NULL")->fetchAll(PDO::FETCH_COLUMN) as $id)
+            $classSet[$id] = true;
+    } catch (\Throwable) {}
 
-    while (!empty($frontier) && time() < $deadline) {
-        $reader      = $factory->newGzDumpReader(DUMP_FILE);
-        if ($resumePos > 0) $reader->seekToPosition($resumePos);
-        $frontierSet = array_flip($frontier);
-        $newNodes    = [];
-        $newLinks    = [];
-        $checked     = 0;
-        $levelDone   = false;
+    $factory  = new JsonDumpFactory();
+    $reader   = $factory->newGzDumpReader(DUMP_FILE);
+    if ($resumePos > 0) $reader->seekToPosition($resumePos);
 
-        while (true) {
-            if (time() >= $deadline) { $timedOut = true; break; }
+    $deadline     = (int)$_SERVER['REQUEST_TIME'] + TIME_LIMIT - 5;
+    $timedOut     = false;
+    $checked      = 0;
+    $BATCH        = 500;
+    $batchNodeUpd = [];
+    $batchClsIns  = [];
+    $batchClsUpd  = [];
 
-            try { $jsonLine = $reader->nextJsonLine(); }
-            catch (\Wikibase\JsonDumpReader\DumpReadingException) { $levelDone = true; break; }
-            if ($jsonLine === null) { $levelDone = true; break; }
+    $stmtNodeUpd = $pdo->prepare(
+        "UPDATE wikidata_nodes SET label=:label, p31=:p31, dump_line=:dl, dump_pos=:dp, updated_at=NOW() WHERE id=:id");
+    $stmtClsIns  = $pdo->prepare("INSERT IGNORE INTO wikidata_p279_class (id, exported_at) VALUES (:id,NOW())");
+    $stmtClsUpd  = $pdo->prepare(
+        "UPDATE wikidata_p279_class SET label=:label, dump_line=:dl, dump_pos=:dp, updated_at=NOW() WHERE id=:id AND label IS NULL");
 
-            $checked++;
-            $entity = json_decode($jsonLine, true);
-            if (!is_array($entity)) continue;
-            $eid = $entity['id'] ?? '';
-            if ($eid === '') continue;
+    while (true) {
+        if (time() >= $deadline) { $timedOut = true; break; }
+        if (empty($dstSet) && empty($classSet)) break;
 
-            // Mettre à jour le label du nœud de départ si on le rencontre
-            if ($eid === $startId && isset($visited[$startId])) {
-                $labels = $entity['labels'] ?? [];
-                $lbl    = $labels['fr']['value'] ?? $labels['en']['value']
-                       ?? (array_values($labels)[0]['value'] ?? $startId);
-                try { $pos = $reader->getPosition(); } catch (\Throwable) { $pos = 0; }
-                insertNodes([['id'=>$startId,'label'=>$lbl,'dump_line'=>$checked,'dump_pos'=>$pos]]);
-            }
+        try { $jsonLine = $reader->nextJsonLine(); }
+        catch (\Wikibase\JsonDumpReader\DumpReadingException) { break; }
+        if ($jsonLine === null) break;
 
-            if (isset($visited[$eid])) continue;
+        $checked++;
+        $entity = json_decode($jsonLine, true);
+        if (!is_array($entity)) continue;
+        $eid = $entity['id'] ?? '';
+        if ($eid === '') continue;
 
-            // Chercher si une valeur P279 de cette entité est dans la frontière courante
-            $matched = [];
-            foreach ($entity['claims']['P279'] ?? [] as $st) {
+        $isDst   = isset($dstSet[$eid]);
+        $isClass = isset($classSet[$eid]);
+        if (!$isDst && !$isClass) continue;
+
+        $labels = $entity['labels'] ?? [];
+        $label  = $labels['fr']['value'] ?? $labels['en']['value']
+               ?? (array_values($labels)[0]['value'] ?? null);
+
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) { $curPos = 0; }
+
+        if ($isDst) {
+            unset($dstSet[$eid]);
+            $p31vals = [];
+            foreach ($entity['claims']['P31'] ?? [] as $st) {
                 $vid = $st['mainsnak']['datavalue']['value']['id'] ?? null;
-                if ($vid !== null && isset($frontierSet[$vid])) $matched[] = $vid;
+                if ($vid !== null) $p31vals[] = $vid;
             }
-            if (empty($matched)) continue;
-
-            $visited[$eid] = true;
-            $labels = $entity['labels'] ?? [];
-            $label  = $labels['fr']['value'] ?? $labels['en']['value']
-                   ?? (array_values($labels)[0]['value'] ?? '');
-            try { $curPos = $reader->getPosition(); } catch (\Throwable) { $curPos = 0; }
-
-            $newNodes[] = ['id'=>$eid,'label'=>$label,'dump_line'=>$checked,'dump_pos'=>$curPos];
-            foreach ($matched as $dst) $newLinks[] = [':s'=>$eid,':d'=>$dst];
+            $p31str = $p31vals ? implode('|', $p31vals) : null;
+            $batchNodeUpd[] = [':id'=>$eid,':label'=>$label,':p31'=>$p31str,':dl'=>$checked,':dp'=>$curPos];
+            foreach ($p31vals as $vid) $batchClsIns[] = [':id'=>$vid];
         }
 
-        // Flush nœuds et liens
-        if (!empty($newNodes)) {
-            $totalNodes += insertNodes($newNodes);
+        if ($isClass) {
+            unset($classSet[$eid]);
+            $batchClsUpd[] = [':id'=>$eid,':label'=>$label,':dl'=>$checked,':dp'=>$curPos];
         }
-        if (!empty($newLinks)) {
+
+        if (count($batchNodeUpd) >= $BATCH || count($batchClsUpd) >= $BATCH) {
             $pdo->beginTransaction();
-            foreach ($newLinks as $l) $stmtLink->execute($l);
+            foreach ($batchNodeUpd as $r) $stmtNodeUpd->execute($r);
+            foreach ($batchClsIns  as $r) $stmtClsIns->execute($r);
+            foreach ($batchClsUpd  as $r) $stmtClsUpd->execute($r);
             $pdo->commit();
-            $totalLinks += count($newLinks);
+            $updNodes += count($batchNodeUpd); $updClass += count($batchClsUpd);
+            $batchNodeUpd = $batchClsIns = $batchClsUpd = [];
         }
-
-        if ($timedOut) {
-            try { $resumePos = $reader->getPosition(); } catch (\Throwable) { $resumePos = 0; }
-            // Conserver la frontière actuelle (niveau pas encore terminé)
-            break;
-        }
-
-        // Niveau terminé : la nouvelle frontière = entités découvertes à ce niveau
-        $levelsCompleted++;
-        $frontier  = array_column($newNodes, 'id');
-        $resumePos = 0; // Repart du début du dump pour le prochain niveau
     }
 
-    $done = !$timedOut && empty($frontier);
-    if (!$done) {
-        saveScanState($stateKey, $resumePos, $totalNodes, $totalLinks, json_encode($frontier));
+    if (!empty($batchNodeUpd) || !empty($batchClsUpd) || !empty($batchClsIns)) {
+        $pdo->beginTransaction();
+        foreach ($batchNodeUpd as $r) $stmtNodeUpd->execute($r);
+        foreach ($batchClsIns  as $r) $stmtClsIns->execute($r);
+        foreach ($batchClsUpd  as $r) $stmtClsUpd->execute($r);
+        $pdo->commit();
+        $updNodes += count($batchNodeUpd); $updClass += count($batchClsUpd);
+    }
+
+    $curPos = 0;
+    if ($timedOut) {
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) {}
+        saveScanState($stateKey, $curPos, $updNodes, $updClass);
     } else {
         clearScanState($stateKey);
     }
 
-    return [
-        'nodesAdded'      => $totalNodes,
-        'linksAdded'      => $totalLinks,
-        'levelsCompleted' => $levelsCompleted,
-        'frontierSize'    => count($frontier),
-        'timedOut'        => $timedOut,
-        'done'            => $done,
-    ];
+    return ['updNodes'=>$updNodes,'updClass'=>$updClass,'remaining'=>count($dstSet)+count($classSet),
+            'checked'=>$checked,'timedOut'=>$timedOut,'done'=>!$timedOut];
 }
 
-// Retourne le réseau stocké en DB au format nodes/links
-function getP279NetworkFromDb(): array {
-    $pdo = getDb();
+// Passe 3 "finaliser" : résout les labels des stubs wikidata_p279_class insérés pendant la passe 2
+function scanDumpForP279Finalize(bool $resume = false): array {
+    $stateKey  = 'p279_final';
+    $pdo       = getDb();
+    $state     = $resume ? getScanState($stateKey) : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+    $resumePos = (int)$state['dump_position'];
+    $updated   = (int)$state['found_so_far'];
+
+    $targets = [];
     try {
-        $nodes = $pdo->query("SELECT id, label FROM wikidata_nodes ORDER BY id")->fetchAll();
-        $links = $pdo->query("SELECT src_id AS idSrc, dst_id AS idDst FROM wikidata_p279_graph")->fetchAll();
-    } catch (\Throwable) { $nodes = []; $links = []; }
-    return ['nodes' => $nodes, 'links' => $links];
+        foreach ($pdo->query("SELECT id FROM wikidata_p279_class WHERE label IS NULL")->fetchAll(PDO::FETCH_COLUMN) as $id)
+            $targets[$id] = true;
+    } catch (\Throwable) {}
+
+    $factory  = new JsonDumpFactory();
+    $reader   = $factory->newGzDumpReader(DUMP_FILE);
+    if ($resumePos > 0) $reader->seekToPosition($resumePos);
+
+    $deadline = (int)$_SERVER['REQUEST_TIME'] + TIME_LIMIT - 5;
+    $timedOut = false;
+    $checked  = 0;
+    $BATCH    = 500;
+    $batch    = [];
+
+    $stmtUpd = $pdo->prepare(
+        "UPDATE wikidata_p279_class SET label=:label, dump_line=:dl, dump_pos=:dp, updated_at=NOW()
+         WHERE id=:id AND label IS NULL");
+
+    while (true) {
+        if (time() >= $deadline) { $timedOut = true; break; }
+        if (empty($targets)) break;
+
+        try { $jsonLine = $reader->nextJsonLine(); }
+        catch (\Wikibase\JsonDumpReader\DumpReadingException) { break; }
+        if ($jsonLine === null) break;
+
+        $checked++;
+        $entity = json_decode($jsonLine, true);
+        if (!is_array($entity)) continue;
+        $eid = $entity['id'] ?? '';
+        if (!isset($targets[$eid])) continue;
+
+        unset($targets[$eid]);
+        $labels = $entity['labels'] ?? [];
+        $label  = $labels['fr']['value'] ?? $labels['en']['value']
+               ?? (array_values($labels)[0]['value'] ?? null);
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) { $curPos = 0; }
+        $batch[] = [':id'=>$eid,':label'=>$label,':dl'=>$checked,':dp'=>$curPos];
+
+        if (count($batch) >= $BATCH) {
+            $pdo->beginTransaction();
+            foreach ($batch as $r) $stmtUpd->execute($r);
+            $pdo->commit();
+            $updated += count($batch); $batch = [];
+        }
+    }
+
+    if (!empty($batch)) {
+        $pdo->beginTransaction();
+        foreach ($batch as $r) $stmtUpd->execute($r);
+        $pdo->commit();
+        $updated += count($batch);
+    }
+
+    $curPos = 0;
+    if ($timedOut) {
+        try { $curPos = $reader->getPosition(); } catch (\Throwable) {}
+        saveScanState($stateKey, $curPos, count($targets), $updated);
+    } else {
+        clearScanState($stateKey);
+    }
+
+    return ['updated'=>$updated,'remaining'=>count($targets),'checked'=>$checked,'timedOut'=>$timedOut,'done'=>!$timedOut];
+}
+
+// BFS en base depuis startId → retourne nodes + links du sous-graphe
+function getP279NetworkFromDb(string $startId): array {
+    $pdo = getDb();
+
+    $nodeIds  = [$startId => true];
+    $frontier = [$startId];
+    $links    = [];
+
+    $stmtSub = $pdo->prepare("SELECT src_id FROM wikidata_p279_graph WHERE dst_id = :did");
+
+    while (!empty($frontier)) {
+        $next = [];
+        foreach ($frontier as $fid) {
+            $stmtSub->execute([':did'=>$fid]);
+            foreach ($stmtSub->fetchAll(PDO::FETCH_COLUMN) as $sid) {
+                if (isset($nodeIds[$sid])) continue;
+                $nodeIds[$sid] = true;
+                $links[] = ['idSrc'=>$sid,'idDst'=>$fid];
+                $next[]  = $sid;
+            }
+        }
+        $frontier = $next;
+    }
+
+    $ids = array_keys($nodeIds);
+    if (empty($ids)) return ['nodes'=>[],'links'=>[]];
+
+    $ph   = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT id, label, p31, dump_line FROM wikidata_nodes WHERE id IN ($ph) ORDER BY id");
+    $stmt->execute($ids);
+    return ['nodes'=>$stmt->fetchAll(),'links'=>$links];
+}
+
+// Export GEXF (Gephi)
+function outputGexf(array $net, string $filename): void {
+    header('Content-Type: application/xml; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $doc = new DOMDocument('1.0', 'UTF-8');
+    $doc->formatOutput = true;
+
+    $gexf = $doc->createElement('gexf');
+    $gexf->setAttribute('xmlns', 'http://gexf.net/1.3');
+    $gexf->setAttribute('version', '1.3');
+    $doc->appendChild($gexf);
+
+    $graph = $doc->createElement('graph');
+    $graph->setAttribute('defaultedgetype', 'directed');
+    $gexf->appendChild($graph);
+
+    $attrs = $doc->createElement('attributes');
+    $attrs->setAttribute('class', 'node');
+    $attr = $doc->createElement('attribute');
+    $attr->setAttribute('id', '0'); $attr->setAttribute('title', 'p31'); $attr->setAttribute('type', 'string');
+    $attrs->appendChild($attr);
+    $graph->appendChild($attrs);
+
+    $nodesEl = $doc->createElement('nodes');
+    foreach ($net['nodes'] as $n) {
+        $node = $doc->createElement('node');
+        $node->setAttribute('id',    $n['id']);
+        $node->setAttribute('label', $n['label'] ?? $n['id']);
+        if (!empty($n['p31'])) {
+            $av = $doc->createElement('attvalues');
+            $a  = $doc->createElement('attvalue');
+            $a->setAttribute('for', '0'); $a->setAttribute('value', $n['p31']);
+            $av->appendChild($a); $node->appendChild($av);
+        }
+        $nodesEl->appendChild($node);
+    }
+    $graph->appendChild($nodesEl);
+
+    $edgesEl = $doc->createElement('edges');
+    foreach ($net['links'] as $i => $l) {
+        $edge = $doc->createElement('edge');
+        $edge->setAttribute('id',     (string)$i);
+        $edge->setAttribute('source', $l['idSrc']);
+        $edge->setAttribute('target', $l['idDst']);
+        $edgesEl->appendChild($edge);
+    }
+    $graph->appendChild($edgesEl);
+
+    echo $doc->saveXML();
+    exit;
 }
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
@@ -1290,30 +1557,52 @@ if ($dbOk) {
         $rows = getOccupationRows($occSrcProp);
         outputDbCsv($rows, 'wikidata_occupations_' . date('Ymd_His') . '.csv');
     }
-    if ($action === 'explore_net' && $netStart !== '') {
-        $res = exploreP279Network($netStart, $netResume);
+    if ($action === 'scan_p279_graph') {
+        $res     = scanDumpForP279Graph($netResume);
         $elapsed = round(microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'], 1);
-        $suffix  = $netResume ? ' (reprise)' : '';
-        $dbMessage = "Réseau depuis {$netStart}{$suffix}"
-            . " · {$res['nodesAdded']} nœuds · {$res['linksAdded']} liens"
-            . " · {$res['levelsCompleted']} niveau(x) · {$elapsed} s"
-            . ($res['timedOut']  ? ' ⏱ timeout — continuez' : '')
-            . ($res['done']      ? ' ✓ exploration terminée' : (!$res['timedOut'] ? " · frontière restante : {$res['frontierSize']}" : ''));
+        $dbMessage = "Passe 1 — {$res['links']} liens · {$res['nodes']} nœuds · {$elapsed} s"
+            . ($res['timedOut'] ? ' ⏱ timeout — continuez' : ' ✓ terminé');
         $tab = 'net';
     }
-    if ($action === 'clear_net') {
+    if ($action === 'scan_p279_compl') {
+        $res     = scanDumpForP279Complement($netResume);
+        $elapsed = round(microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'], 1);
+        $dbMessage = "Passe 2 — {$res['updNodes']} nœuds maj · {$res['updClass']} classes maj"
+            . " · {$res['remaining']} restants · {$elapsed} s"
+            . ($res['timedOut'] ? ' ⏱ timeout — continuez' : ' ✓ terminé');
+        $tab = 'net';
+    }
+    if ($action === 'scan_p279_final') {
+        $res     = scanDumpForP279Finalize($netResume);
+        $elapsed = round(microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'], 1);
+        $dbMessage = "Passe 3 — {$res['updated']} classes finalisées · {$res['remaining']} restantes · {$elapsed} s"
+            . ($res['timedOut'] ? ' ⏱ timeout — continuez' : ' ✓ terminé');
+        $tab = 'net';
+    }
+    if ($action === 'build_net' && $netStart !== '') {
+        $dbMessage = "BFS depuis {$netStart} — voir les résultats ci-dessous.";
+        $tab = 'net';
+    }
+    if ($action === 'clear_p279') {
         getDb()->exec("DELETE FROM wikidata_p279_graph");
+        getDb()->exec("DELETE FROM wikidata_p279_class");
         getDb()->exec("DELETE FROM wikidata_nodes");
-        clearScanState('net_' . $netStart);
-        $dbMessage = "Tables wikidata_p279_graph et wikidata_nodes vidées.";
+        clearScanState('p279_graph');
+        clearScanState('p279_compl');
+        clearScanState('p279_final');
+        $dbMessage = "Tables P279 (graphe, classes, nœuds) vidées.";
         $tab = 'net';
     }
-    if ($action === 'json_net') {
-        $net = getP279NetworkFromDb();
-        header('Content-Type: application/json; charset=utf-8');
-        header('Content-Disposition: attachment; filename="p279_network_' . date('Ymd_His') . '.json"');
-        echo json_encode($net, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        exit;
+    if (($action === 'json_net' || $action === 'gexf_net') && $netStart !== '') {
+        $net = getP279NetworkFromDb($netStart);
+        $fn  = 'p279_' . $netStart . '_' . date('Ymd_His');
+        if ($action === 'json_net') {
+            header('Content-Type: application/json; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $fn . '.json"');
+            echo json_encode($net, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        outputGexf($net, $fn . '.gexf');
     }
 }
 
@@ -1389,10 +1678,17 @@ $geoScanState  = $dbOk ? getScanState('geo_' . $geoSrcProp) : ['dump_position' =
 $occCount      = $dbOk ? countOccupationRows() : 0;
 $occRows       = ($tab === 'occs'  && $dbOk) ? getOccupationRows($occSrcProp) : [];
 $occScanState  = $dbOk ? getScanState('occ_' . $occSrcProp) : ['dump_position' => 0, 'total_target' => 0, 'found_so_far' => 0];
-$netLinkCount  = $dbOk ? countP279GraphRows() : 0;
-$netNodeCount  = $dbOk ? countNetworkNodes() : 0;
-$netScanState  = $dbOk && $netStart !== '' ? getScanState('net_' . $netStart) : ['dump_position' => 0, 'total_target' => 0, 'found_so_far' => 0, 'frontier_json' => '[]'];
-$netNetwork    = ($tab === 'net' && $dbOk && ($netNodeCount > 0)) ? getP279NetworkFromDb() : null;
+$netGraphCount     = $dbOk ? countP279GraphRows() : 0;
+$netClassCount     = $dbOk ? countP279ClassRows() : 0;
+$netNodeCount      = $dbOk ? countNetworkNodes() : 0;
+$netGraphScanState = $dbOk ? getScanState('p279_graph') : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+$netComplScanState = $dbOk ? getScanState('p279_compl') : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+$netFinalScanState = $dbOk ? getScanState('p279_final') : ['dump_position'=>0,'total_target'=>0,'found_so_far'=>0];
+$netNetwork = null;
+if ($tab === 'net' && $dbOk && $netStart !== '' && $netGraphCount > 0
+    && !in_array($action, ['scan_p279_graph','scan_p279_compl','scan_p279_final'])) {
+    try { $netNetwork = getP279NetworkFromDb($netStart); } catch (\Throwable) {}
+}
 $searchQueries = $dbOk ? getDistinctSearchQueries() : [];
 
 $rowsJson   = json_encode($results);
@@ -2081,80 +2377,141 @@ footer { text-align: center; font-size: .78rem; color: #aaa; padding: 2rem 0 3re
 <!-- ═══ RÉSEAU P279 ═══ -->
 <div id="tab-net" class="tab-panel <?= $tab === 'net' ? 'active' : '' ?>">
 
-  <!-- Formulaire d'exploration -->
-  <div class="card">
-    <div class="card-title">Explorer le réseau P279 depuis une entité</div>
-    <?php if (!$dbOk): ?>
-    <div class="alert alert-danger">Connexion MariaDB indisponible.</div>
-    <?php else: ?>
-    <form method="get" action="">
-      <input type="hidden" name="tab"    value="net">
-      <input type="hidden" name="action" value="explore_net">
-      <div class="row">
-        <label>Entité de départ</label>
-        <input type="text" name="net_start" class="xnarrow" value="<?= h($netStart) ?>"
-               placeholder="ex: Q28640" style="width:8rem" autofocus>
-        <button type="submit" class="btn btn-success" <?= !$dumpExists ? 'disabled' : '' ?>>
-          ↗ Explorer depuis le dump
-        </button>
-        <?php if ($netNodeCount > 0): ?>
-        <a href="?tab=net&action=clear_net&net_start=<?= h($netStart) ?>" class="btn btn-danger btn-sm"
-           onclick="return confirm('Vider les tables wikidata_nodes et wikidata_p279_graph ?')">🗑 Vider</a>
-        <a href="?tab=net&action=json_net" class="btn btn-info btn-sm">⬇ JSON</a>
-        <?php endif; ?>
-      </div>
-      <div class="muted" style="margin-top:.3rem;">
-        BFS niveau par niveau dans le dump : trouve les entités ayant l'entité de départ comme valeur de P279,
-        puis leurs propres sous-classes, etc. S'arrête sur les entités déjà explorées.
-        Les nœuds (id, label, position dump) sont stockés dans <code>wikidata_nodes</code>,
-        les liens dans <code>wikidata_p279_graph</code>.
-      </div>
-    </form>
-
-    <?php if ((int)$netScanState['dump_position'] > 0 || count(json_decode($netScanState['frontier_json'] ?? '[]', true) ?: []) > 0): ?>
-    <?php
-      $frontier     = json_decode($netScanState['frontier_json'] ?? '[]', true) ?: [];
-      $continueUrl  = '?' . http_build_query(['tab'=>'net','action'=>'explore_net','net_start'=>$netStart,'net_resume'=>'1']);
-    ?>
-    <div class="stat-bar" style="margin-top:.75rem; background:#fff3cd; border-radius:6px; padding:.5rem .75rem;">
-      <span>⏱ Exploration interrompue · <?= $netNodeCount ?> nœuds · <?= $netLinkCount ?> liens
-            · frontière&nbsp;: <?= count($frontier) ?> entité(s)</span>
-      <a href="<?= h($continueUrl) ?>" class="btn btn-warning btn-sm" style="margin-left:.75rem">
-        ▶ Continuer
-      </a>
-    </div>
-    <?php endif; ?>
-    <?php endif; ?>
-  </div>
-
   <?php if ($dbMessage && $tab === 'net'): ?>
   <div class="alert alert-success"><?= h($dbMessage) ?></div>
   <?php endif; ?>
 
-  <!-- Résultats -->
-  <?php if ($netNetwork !== null && ($netNodeCount > 0)): ?>
+  <!-- Passe 1 -->
   <div class="card">
-    <?php
-      $nodeCount = count($netNetwork['nodes']);
-      $linkCount = count($netNetwork['links']);
-    ?>
-    <div class="row" style="justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:.75rem;">
-      <div class="card-title" style="margin:0;border:none;padding:0;">
-        Réseau &nbsp;·&nbsp; <strong><?= $nodeCount ?></strong> nœuds &nbsp;·&nbsp; <strong><?= $linkCount ?></strong> liens
+    <div class="card-title">Passe 1 — Initialiser
+      <span style="font-weight:400;font-size:.85rem;margin-left:.5rem;"><?= $netGraphCount ?> liens · <?= $netNodeCount ?> nœuds · <?= $netClassCount ?> classes P31</span>
+    </div>
+    <?php if (!$dbOk): ?>
+    <div class="alert alert-danger">Connexion MariaDB indisponible.</div>
+    <?php else: ?>
+    <div class="row" style="gap:.5rem;flex-wrap:wrap;align-items:center;">
+      <a href="?tab=net&action=scan_p279_graph" class="btn btn-primary"
+         <?= !$dumpExists ? 'style="pointer-events:none;opacity:.5"' : '' ?>>▶ Scanner le dump</a>
+      <?php if ($netGraphCount > 0): ?>
+      <a href="?tab=net&action=clear_p279" class="btn btn-danger btn-sm"
+         onclick="return confirm('Vider toutes les tables P279 ?')">🗑 Tout vider</a>
+      <?php endif; ?>
+    </div>
+    <?php if ((int)$netGraphScanState['dump_position'] > 0): ?>
+    <div class="stat-bar" style="margin-top:.5rem;background:#fff3cd;border-radius:6px;padding:.5rem .75rem;">
+      ⏱ Passe 1 interrompue &nbsp;
+      <a href="?tab=net&action=scan_p279_graph&net_resume=1" class="btn btn-warning btn-sm">▶ Reprendre</a>
+    </div>
+    <?php endif; ?>
+    <div class="muted" style="margin-top:.4rem;">
+      Pour chaque entité du dump ayant P279 : enregistre le lien dans <code>wikidata_p279_graph</code>,
+      le nœud src (complet) et les dst (stub id) dans <code>wikidata_nodes</code>,
+      et les valeurs P31 du src (stub id) dans <code>wikidata_p279_class</code>.
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- Passe 2 -->
+  <div class="card">
+    <div class="card-title">Passe 2 — Compléter</div>
+    <?php if ($netGraphCount === 0): ?>
+    <div class="muted">Lancez d'abord la Passe 1.</div>
+    <?php elseif (!$dbOk): ?>
+    <div class="alert alert-danger">Connexion MariaDB indisponible.</div>
+    <?php else: ?>
+    <div class="row" style="gap:.5rem;flex-wrap:wrap;align-items:center;">
+      <a href="?tab=net&action=scan_p279_compl" class="btn btn-primary"
+         <?= !$dumpExists ? 'style="pointer-events:none;opacity:.5"' : '' ?>>▶ Scanner le dump</a>
+    </div>
+    <?php if ((int)$netComplScanState['dump_position'] > 0): ?>
+    <div class="stat-bar" style="margin-top:.5rem;background:#fff3cd;border-radius:6px;padding:.5rem .75rem;">
+      ⏱ Passe 2 interrompue &nbsp;
+      <a href="?tab=net&action=scan_p279_compl&net_resume=1" class="btn btn-warning btn-sm">▶ Reprendre</a>
+    </div>
+    <?php endif; ?>
+    <div class="muted" style="margin-top:.4rem;">
+      Pour chaque entité dst : complète <code>wikidata_nodes</code> (label, P31, position) et insère ses P31 dans
+      <code>wikidata_p279_class</code>. Met aussi à jour les labels des classes déjà connues.
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- Passe 3 -->
+  <div class="card">
+    <div class="card-title">Passe 3 — Finaliser les classes P31</div>
+    <?php if ($netClassCount === 0): ?>
+    <div class="muted">Lancez d'abord les Passes 1 et 2.</div>
+    <?php elseif (!$dbOk): ?>
+    <div class="alert alert-danger">Connexion MariaDB indisponible.</div>
+    <?php else: ?>
+    <div class="row" style="gap:.5rem;flex-wrap:wrap;align-items:center;">
+      <a href="?tab=net&action=scan_p279_final" class="btn btn-primary"
+         <?= !$dumpExists ? 'style="pointer-events:none;opacity:.5"' : '' ?>>▶ Scanner le dump</a>
+    </div>
+    <?php if ((int)$netFinalScanState['dump_position'] > 0): ?>
+    <div class="stat-bar" style="margin-top:.5rem;background:#fff3cd;border-radius:6px;padding:.5rem .75rem;">
+      ⏱ Passe 3 interrompue &nbsp;
+      <a href="?tab=net&action=scan_p279_final&net_resume=1" class="btn btn-warning btn-sm">▶ Reprendre</a>
+    </div>
+    <?php endif; ?>
+    <div class="muted" style="margin-top:.4rem;">
+      Résout les labels des entrées <code>wikidata_p279_class</code> insérées pendant la Passe 2 (P31 des dst).
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- Explorer -->
+  <div class="card">
+    <div class="card-title">Explorer le réseau depuis une entité</div>
+    <?php if (!$dbOk): ?>
+    <div class="alert alert-danger">Connexion MariaDB indisponible.</div>
+    <?php elseif ($netGraphCount === 0): ?>
+    <div class="muted">Lancez d'abord la Passe 1.</div>
+    <?php else: ?>
+    <form method="get" action="">
+      <input type="hidden" name="tab"    value="net">
+      <input type="hidden" name="action" value="build_net">
+      <div class="row" style="gap:.5rem;flex-wrap:wrap;align-items:center;">
+        <label>Entité de départ</label>
+        <input type="text" name="net_start" class="xnarrow" value="<?= h($netStart) ?>"
+               placeholder="ex: Q28640" style="width:8rem" autofocus>
+        <button type="submit" class="btn btn-success">↗ BFS depuis cette entité</button>
+        <?php if ($netNetwork !== null): ?>
+        <a href="?tab=net&action=json_net&net_start=<?= h($netStart) ?>" class="btn btn-info btn-sm">⬇ JSON</a>
+        <a href="?tab=net&action=gexf_net&net_start=<?= h($netStart) ?>" class="btn btn-info btn-sm">⬇ GEXF</a>
+        <?php endif; ?>
       </div>
+    </form>
+    <div class="muted" style="margin-top:.4rem;">
+      BFS pur en base sur <code>wikidata_p279_graph</code> — instantané, pas de scan dump.
+      Nœuds issus de <code>wikidata_nodes</code>.
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- Résultats -->
+  <?php if ($netNetwork !== null): ?>
+  <?php
+    $nodeCount = count($netNetwork['nodes']);
+    $linkCount = count($netNetwork['links']);
+  ?>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:.75rem;">
+      Réseau &nbsp;·&nbsp; <strong><?= $nodeCount ?></strong> nœuds
+      &nbsp;·&nbsp; <strong><?= $linkCount ?></strong> liens
     </div>
 
-    <!-- Nœuds -->
     <details open style="margin-bottom:1rem;">
       <summary style="cursor:pointer;font-weight:600;margin-bottom:.5rem;">Nœuds (<?= $nodeCount ?>)</summary>
-      <div style="max-height:300px;overflow-y:auto;">
+      <div style="max-height:320px;overflow-y:auto;">
         <table>
-          <thead><tr><th>ID</th><th>Label</th><th>Ligne dump</th></tr></thead>
+          <thead><tr><th>ID</th><th>Label</th><th>P31</th><th>Ligne dump</th></tr></thead>
           <tbody>
             <?php foreach ($netNetwork['nodes'] as $n): ?>
             <tr>
               <td><a class="id-link" href="https://www.wikidata.org/wiki/<?= h($n['id']) ?>" target="_blank"><?= h($n['id']) ?></a></td>
               <td><?= h($n['label'] ?? '') ?></td>
+              <td class="muted" style="font-size:.8rem"><?= h($n['p31'] ?? '') ?></td>
               <td class="muted"><?= (int)($n['dump_line'] ?? 0) ?: '—' ?></td>
             </tr>
             <?php endforeach; ?>
@@ -2163,10 +2520,9 @@ footer { text-align: center; font-size: .78rem; color: #aaa; padding: 2rem 0 3re
       </div>
     </details>
 
-    <!-- Liens -->
     <details style="margin-bottom:1rem;">
       <summary style="cursor:pointer;font-weight:600;margin-bottom:.5rem;">Liens (<?= $linkCount ?>)</summary>
-      <div style="max-height:300px;overflow-y:auto;">
+      <div style="max-height:320px;overflow-y:auto;">
         <table>
           <thead><tr><th>Source (sous-classe)</th><th>Destination (superclasse)</th></tr></thead>
           <tbody>
@@ -2179,12 +2535,6 @@ footer { text-align: center; font-size: .78rem; color: #aaa; padding: 2rem 0 3re
           </tbody>
         </table>
       </div>
-    </details>
-
-    <!-- JSON brut -->
-    <details>
-      <summary style="cursor:pointer;font-weight:600;margin-bottom:.5rem;">JSON brut</summary>
-      <pre style="max-height:400px;overflow:auto;background:#1e1e1e;color:#d4d4d4;padding:1rem;border-radius:6px;font-size:.8rem"><?= h(json_encode($netNetwork, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
     </details>
   </div>
   <?php endif; ?>
