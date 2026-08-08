@@ -1,0 +1,855 @@
+<title>monWikidata — Documentation</title>
+<style>
+/* ── Tokens ────────────────────────────────────────────────── */
+:root {
+  --bg:         #F4F6FA;
+  --surface:    #FFFFFF;
+  --text:       #1A2030;
+  --muted:      #64748B;
+  --accent:     #1A6CF5;
+  --accent-dim: #E8F0FE;
+  --border:     #D8DEE9;
+  --code-bg:    #EDF0F7;
+  --warn:       #B45309;
+  --warn-bg:    #FEF3C7;
+  --success:    #15803D;
+  --sb-bg:      #FFFFFF;
+  --sb-active:  #E8F0FE;
+  --font-body:  system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:  'SF Mono','Cascadia Code','Fira Code','Consolas',monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:         #0C1018;
+    --surface:    #161C27;
+    --text:       #CDD9E8;
+    --muted:      #7A8EA8;
+    --accent:     #4D9EFB;
+    --accent-dim: #1A2A40;
+    --border:     #253045;
+    --code-bg:    #111722;
+    --warn:       #F59E0B;
+    --warn-bg:    #1C160A;
+    --success:    #34D399;
+    --sb-bg:      #0C1018;
+    --sb-active:  #1A2A40;
+  }
+}
+:root[data-theme="light"] {
+  --bg:#F4F6FA; --surface:#FFFFFF; --text:#1A2030; --muted:#64748B;
+  --accent:#1A6CF5; --accent-dim:#E8F0FE; --border:#D8DEE9;
+  --code-bg:#EDF0F7; --warn:#B45309; --warn-bg:#FEF3C7; --success:#15803D;
+  --sb-bg:#FFFFFF; --sb-active:#E8F0FE;
+}
+:root[data-theme="dark"] {
+  --bg:#0C1018; --surface:#161C27; --text:#CDD9E8; --muted:#7A8EA8;
+  --accent:#4D9EFB; --accent-dim:#1A2A40; --border:#253045;
+  --code-bg:#111722; --warn:#F59E0B; --warn-bg:#1C160A; --success:#34D399;
+  --sb-bg:#0C1018; --sb-active:#1A2A40;
+}
+
+/* ── Reset / Base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 228px 1fr;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--sb-bg);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 1.5rem 0 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--accent);
+}
+.sidebar-brand p {
+  font-size: .78rem;
+  color: var(--muted);
+  margin-top: .2rem;
+}
+.nav-group { margin-bottom: .25rem; }
+.nav-label {
+  font-size: .7rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  padding: .5rem 1.25rem .25rem;
+  display: block;
+}
+.nav-link {
+  display: block;
+  padding: .35rem 1.25rem;
+  font-size: .85rem;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 0;
+  transition: background .12s, color .12s;
+}
+.nav-link:hover { background: var(--accent-dim); color: var(--accent); }
+.nav-link.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.nav-link.sub { padding-left: 2rem; font-size: .82rem; color: var(--muted); }
+.nav-link.sub:hover, .nav-link.sub.active { color: var(--accent); }
+
+/* ── Main content ───────────────────────────────────────────── */
+.content {
+  padding: 3rem 3.5rem 4rem;
+  max-width: 880px;
+}
+.content > section { margin-bottom: 4rem; }
+
+/* ── Typography ─────────────────────────────────────────────── */
+h1, h2, h3 {
+  font-family: var(--font-mono);
+  text-wrap: balance;
+  letter-spacing: -.03em;
+  color: var(--text);
+}
+h1 { font-size: 2rem; font-weight: 700; line-height: 1.15; margin-bottom: .75rem; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 1rem; padding-top: 2.5rem;
+     border-top: 1px solid var(--border); }
+h2:first-of-type { border-top: none; padding-top: 0; }
+h3 { font-size: 1rem; font-weight: 600; margin: 1.75rem 0 .6rem; color: var(--accent); }
+p { margin-bottom: .85rem; }
+.lead { font-size: 1.05rem; color: var(--muted); max-width: 60ch; margin-bottom: 1.5rem; }
+strong { color: var(--text); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Code ───────────────────────────────────────────────────── */
+code {
+  font-family: var(--font-mono);
+  font-size: .82em;
+  background: var(--code-bg);
+  color: var(--text);
+  padding: .1em .35em;
+  border-radius: 3px;
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  line-height: 1.6;
+  color: var(--text);
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ── Tables ─────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin: 1.25rem 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+  font-variant-numeric: tabular-nums;
+}
+th {
+  font-family: var(--font-mono);
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  text-align: left;
+  padding: .6rem .9rem;
+  background: var(--code-bg);
+  border-bottom: 2px solid var(--border);
+  color: var(--muted);
+}
+td {
+  padding: .55rem .9rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--accent-dim); }
+
+/* ── Callout ────────────────────────────────────────────────── */
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-dim);
+  padding: .85rem 1.1rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1.25rem 0;
+  font-size: .9rem;
+}
+.callout.warn {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+/* ── Diagrams ───────────────────────────────────────────────── */
+figure {
+  margin: 1.75rem 0;
+}
+figcaption {
+  font-size: .8rem;
+  color: var(--muted);
+  margin-top: .6rem;
+  font-style: italic;
+}
+.mermaid-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+pre.mermaid {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 1rem;
+}
+svg.arch-diagram {
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+  display: block;
+}
+
+/* ── Tabs strip ─────────────────────────────────────────────── */
+.tabs-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1rem 0 1.75rem;
+}
+.tab-pill {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  padding: .3rem .75rem;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.tab-pill.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  .content { padding: 1.5rem 1.25rem 3rem; }
+  h1 { font-size: 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+
+<div class="layout">
+
+<!-- ══ Sidebar ══════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>monWikidata</h1>
+    <p>Explorateur de dump Wikidata</p>
+  </div>
+
+  <nav>
+    <div class="nav-group">
+      <span class="nav-label">Démarrage</span>
+      <a class="nav-link" href="#overview">Vue d'ensemble</a>
+      <a class="nav-link" href="#install">Installation</a>
+      <a class="nav-link" href="#architecture">Architecture</a>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Onglets</span>
+      <a class="nav-link" href="#search">Recherche</a>
+      <a class="nav-link" href="#entities">Entités</a>
+      <a class="nav-link" href="#props">Propriétés</a>
+      <a class="nav-link" href="#geos">Géos</a>
+      <a class="nav-link" href="#occs">Occupations</a>
+      <a class="nav-link" href="#network">Réseau P279</a>
+    </div>
+    <div class="nav-group">
+      <span class="nav-label">Référence</span>
+      <a class="nav-link" href="#timeout">Timeout &amp; reprise</a>
+      <a class="nav-link" href="#schema">Base de données</a>
+      <a class="nav-link" href="#exports">Exports</a>
+      <a class="nav-link" href="#config">Constantes</a>
+    </div>
+  </nav>
+</aside>
+
+<!-- ══ Content ══════════════════════════════════════════════════ -->
+<main class="content">
+
+<!-- Vue d'ensemble -->
+<section id="overview">
+  <h1>monWikidata</h1>
+  <p class="lead">Application PHP pour explorer le dump JSON compressé de Wikidata. Chaque scan (~100 Go) est interruptible et repris automatiquement après timeout grâce à <code>seekToPosition()</code>.</p>
+
+  <div class="tabs-strip">
+    <span class="tab-pill active">Recherche</span>
+    <span class="tab-pill">Entités</span>
+    <span class="tab-pill">Propriétés</span>
+    <span class="tab-pill">Géos</span>
+    <span class="tab-pill">Occupations</span>
+    <span class="tab-pill">Réseau P279</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Composant</th><th>Rôle</th></tr></thead>
+      <tbody>
+        <tr><td><code>exploreDump.php</code></td><td>Point d'entrée unique — request handling, scan, rendu HTML</td></tr>
+        <tr><td><code>jeroen/json-dump-reader</code></td><td>Lecture ligne par ligne du dump .gz avec seek byte-level</td></tr>
+        <tr><td>MariaDB</td><td>Stockage des entités, propriétés, réseau P279, états de scan</td></tr>
+        <tr><td><code>config.php</code></td><td>Credentials de connexion (hors dépôt)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Installation -->
+<section id="install">
+  <h2>Installation</h2>
+
+  <h3>Prérequis</h3>
+  <ul style="margin:.5rem 0 1rem 1.5rem;line-height:2">
+    <li>PHP 8.3+ (<code>/opt/homebrew/bin/php</code> sur macOS)</li>
+    <li>MariaDB — base <code>wikidata</code> créée manuellement</li>
+    <li>Composer</li>
+    <li>Dump <code>wikidata-20240101-all.json.gz</code> à la racine</li>
+  </ul>
+
+  <pre><code>composer install
+cp config.example.php config.php   # host, port, dbname, user, pass</code></pre>
+
+  <p>Les tables sont créées automatiquement au premier appel (<code>getDb()</code>). Les migrations <code>ALTER TABLE … ADD COLUMN IF NOT EXISTS</code> s'appliquent sur les bases existantes.</p>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>Le mécanisme central est la boucle de reprise : au timeout, PHP sauvegarde la position byte du lecteur dans <code>wikidata_scan_state</code>. À la requête suivante, il appelle <code>seekToPosition(saved_pos)</code> sur le <code>GzDumpReader</code> pour reprendre exactement là où il s'est arrêté.</p>
+
+  <figure>
+    <!-- Architecture SVG -->
+    <div class="mermaid-wrap" style="padding:1.75rem 1.25rem">
+      <svg class="arch-diagram" viewBox="0 0 700 220" role="img"
+           aria-label="Chaîne de lecture : Navigateur → PHP → MariaDB / GzDumpReader → Dump .gz, avec boucle seekToPosition"
+           xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0,8 3,0 6" fill="currentColor"/>
+          </marker>
+          <marker id="a2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0,8 3,0 6" fill="#1A6CF5"/>
+          </marker>
+          <marker id="a2d" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0,8 3,0 6" fill="#1A6CF5" opacity=".6"/>
+          </marker>
+        </defs>
+
+        <!-- Navigateur -->
+        <rect x="270" y="12" width="160" height="42" rx="6"
+              fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+        <text x="350" y="32" text-anchor="middle" font-size="12"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".9">Navigateur</text>
+        <text x="350" y="47" text-anchor="middle" font-size="10"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".5">HTTP GET / POST</text>
+
+        <!-- PHP (accent) -->
+        <rect x="245" y="110" width="210" height="52" rx="7"
+              fill="none" stroke="#1A6CF5" stroke-width="2"/>
+        <text x="350" y="131" text-anchor="middle" font-size="12" font-weight="700"
+              font-family="'SF Mono','Consolas',monospace" fill="#1A6CF5">exploreDump.php</text>
+        <text x="350" y="149" text-anchor="middle" font-size="10"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".55">PHP 8.3 · TIME_LIMIT = 3 h</text>
+
+        <!-- MariaDB -->
+        <rect x="20" y="110" width="140" height="52" rx="6"
+              fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+        <text x="90" y="132" text-anchor="middle" font-size="12"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".9">MariaDB</text>
+        <text x="90" y="150" text-anchor="middle" font-size="9.5"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".5">wikidata_scan_state</text>
+
+        <!-- GzDumpReader -->
+        <rect x="470" y="110" width="140" height="52" rx="6"
+              fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+        <text x="540" y="132" text-anchor="middle" font-size="12"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".9">GzDumpReader</text>
+        <text x="540" y="150" text-anchor="middle" font-size="9.5"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".5">seekToPosition()</text>
+
+        <!-- Dump -->
+        <rect x="470" y="188" width="140" height="26" rx="5"
+              fill="none" stroke="currentColor" stroke-width="1.2" opacity=".4"/>
+        <text x="540" y="206" text-anchor="middle" font-size="10"
+              font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".6">Dump .json.gz · ~100 Go</text>
+
+        <!-- ↓ Navigateur → PHP : HTTP -->
+        <line x1="338" y1="54" x2="320" y2="110" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)" opacity=".6"/>
+        <!-- ↑ PHP → Navigateur : HTML/export -->
+        <line x1="356" y1="110" x2="374" y2="54" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)" opacity=".6"/>
+        <text x="390" y="84" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".55">HTML / CSV</text>
+        <text x="390" y="95" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".55">JSON / GEXF</text>
+        <text x="213" y="88" text-anchor="end" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".55">HTTP GET/POST</text>
+
+        <!-- ↔ PHP ↔ MariaDB -->
+        <line x1="245" y1="128" x2="160" y2="128" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)" opacity=".6"/>
+        <line x1="160" y1="142" x2="245" y2="142" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)" opacity=".6"/>
+        <text x="200" y="170" text-anchor="middle" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".5">INSERT / SELECT</text>
+
+        <!-- → PHP → Reader : seekToPosition (accent, key mechanism) -->
+        <line x1="455" y1="136" x2="470" y2="136" stroke="#1A6CF5" stroke-width="2"
+              marker-end="url(#a2)" stroke-dasharray="5 3"/>
+        <text x="462" y="128" text-anchor="middle" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="#1A6CF5">seekToPosition</text>
+        <text x="462" y="112" text-anchor="middle" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="#1A6CF5">(saved_pos)</text>
+
+        <!-- ↓ Reader → Dump -->
+        <line x1="540" y1="162" x2="540" y2="188" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)" opacity=".55"/>
+        <text x="556" y="179" font-size="9" font-family="'SF Mono','Consolas',monospace" fill="currentColor" opacity=".5">nextJsonLine()</text>
+      </svg>
+    </div>
+    <figcaption>La flèche bleue pointillée <strong>seekToPosition(saved_pos)</strong> est le mécanisme central : PHP lit la position sauvegardée dans MariaDB et positionne le lecteur au bon octet du dump pour reprendre après timeout.</figcaption>
+  </figure>
+</section>
+
+<!-- Recherche -->
+<section id="search">
+  <h2>Onglet Recherche</h2>
+  <p>Recherche full-text dans les labels et descriptions du dump, avec filtres combinables.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Filtre</th><th>Paramètre</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Texte</td><td><code>query</code></td><td>Recherche dans labels + descriptions (min. 2 caractères)</td></tr>
+        <tr><td>Langue</td><td><code>lang</code></td><td>fr, en, all — langue du label recherché</td></tr>
+        <tr><td>Classe (P31)</td><td><code>p31</code></td><td>Identifiant Wikidata (ex. <code>Q5</code> = humain)</td></tr>
+        <tr><td>Sous-classe (P279)</td><td><code>p279</code></td><td>Filtre sur la propriété P279</td></tr>
+        <tr><td>Type</td><td><code>entity_type</code></td><td>item · property · lexeme</td></tr>
+        <tr><td>Identifiant</td><td><code>id_filter</code></td><td>QID exact ou liste comma-séparée</td></tr>
+        <tr><td>Plage de lignes</td><td><code>line_from / line_to</code></td><td>Restreint le scan à un intervalle de lignes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Résultats exportables en <strong>CSV</strong> (depuis les résultats affichés) ou envoyés directement en base (<strong>Export direct</strong>) avec reprise automatique après timeout.</p>
+
+  <h3>Flux de recherche avec reprise</h3>
+  <div class="mermaid-wrap">
+    <pre class="mermaid">
+sequenceDiagram
+    participant U as Navigateur
+    participant P as PHP
+    participant DB as MariaDB
+    participant D as Dump .gz
+
+    U->>P: GET query + filtres
+    P->>DB: SELECT dump_position WHERE search_id = N
+    DB-->>P: saved_pos (0 si premier appel)
+    P->>D: seekToPosition(saved_pos)
+    loop nextJsonLine
+        D-->>P: entité JSON
+        P->>P: match texte + filtres P31/P279
+        alt deadline atteinte
+            P->>DB: UPDATE dump_position = pos_courante
+            P-->>U: ⏱ timeout — lien Reprendre
+        end
+    end
+    P->>DB: INSERT wikidata_search_entities (si export direct)
+    P-->>U: ✓ résultats / export terminé
+    </pre>
+  </div>
+</section>
+
+<!-- Entités -->
+<section id="entities">
+  <h2>Onglet Entités</h2>
+  <p>Visualise et gère les entités stockées dans <code>wikidata_entities</code> après export depuis une recherche.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Colonne</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>QID Wikidata (ex. <code>Q42</code>)</td></tr>
+        <tr><td><code>label</code></td><td>Label préféré (fr → en → premier disponible)</td></tr>
+        <tr><td><code>p31</code> · <code>p279</code></td><td>Valeurs pipe-séparées des classes et sous-classes</td></tr>
+        <tr><td><code>sitelinks</code> · <code>statements</code> · <code>externalIds</code></td><td>Compteurs issus du dump</td></tr>
+        <tr><td><code>dump_line</code> · <code>dump_pos</code></td><td>Numéro de ligne et position byte dans le dump</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Actions : supprimer une entité individuelle, vider toute la table, exporter en CSV, scanner les propriétés d'une entité.</p>
+</section>
+
+<!-- Propriétés -->
+<section id="props">
+  <h2>Onglet Propriétés</h2>
+  <p>Scan du dump pour extraire les valeurs d'une propriété donnée (ex. <code>P569</code> date de naissance) pour les entités déjà stockées en base.</p>
+
+  <div class="callout">
+    Nécessite au moins une recherche exportée dans <strong>wikidata_entities</strong> avant de lancer le scan.
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Colonne</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>property</code></td><td>Code de propriété (ex. <code>P569</code>)</td></tr>
+        <tr><td><code>value_type</code></td><td>wikibase-item · time · string · quantity · etc.</td></tr>
+        <tr><td><code>value_id</code></td><td>QID cible si <code>value_type = wikibase-item</code></td></tr>
+        <tr><td><code>value_str</code></td><td>Représentation texte de la valeur</td></tr>
+        <tr><td><code>rank</code></td><td>normal · preferred · deprecated</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Géos -->
+<section id="geos">
+  <h2>Onglet Géos</h2>
+  <p>Extraction des coordonnées géographiques (P625) pour les entités référencées par <code>P19</code> (lieu de naissance) déjà stockées dans <code>wikidata_properties</code>.</p>
+
+  <p>Le scan est résumable après timeout. Les coordonnées sont stockées dans <code>wikidata_geos</code> avec latitude, longitude, précision et globe (Terre par défaut).</p>
+
+  <pre><code>-- Requête source
+SELECT DISTINCT value_id FROM wikidata_properties WHERE property = 'P19';</code></pre>
+</section>
+
+<!-- Occupations -->
+<section id="occs">
+  <h2>Onglet Occupations</h2>
+  <p>Extraction des entités référencées par <code>P106</code> (occupation) avec leur hiérarchie <code>subclass_of</code> (valeurs P279 pipe-séparées).</p>
+
+  <pre><code>-- Requête source
+SELECT DISTINCT value_id FROM wikidata_properties WHERE property = 'P106';</code></pre>
+
+  <p>Les occupations sont stockées dans <code>wikidata_occupations(id, label, subclass_of)</code>. Le champ <code>subclass_of</code> contient les QID parents séparés par <code>|</code>.</p>
+
+  <p><strong>Requête pour joindre les occupations avec leurs nœuds :</strong></p>
+  <pre><code>SELECT o.id, o.label, n.id, n.label
+FROM wikidata_occupations o
+LEFT JOIN wikidata_nodes n
+  ON FIND_IN_SET(n.id, REPLACE(o.subclass_of, '|', ',')) > 0
+WHERE o.id = 'Q10873124';</code></pre>
+
+  <div class="callout warn">
+    <code>IN (CONCAT(...))</code> ne fonctionne pas : SQL traite le résultat comme une seule chaîne. Utilisez toujours <code>FIND_IN_SET(n.id, REPLACE(..., '|', ','))</code> pour les champs pipe-séparés.
+  </div>
+</section>
+
+<!-- Réseau P279 -->
+<section id="network">
+  <h2>Onglet Réseau P279</h2>
+  <p>Exploration du graphe de sous-classes Wikidata (propriété P279) en 3 passes sur le dump, suivie d'un BFS instantané en base pour extraire un sous-graphe depuis une entité de départ.</p>
+
+  <h3>Workflow en 3 passes</h3>
+  <div class="mermaid-wrap">
+    <pre class="mermaid">
+flowchart TD
+    subgraph P1["Passe 1 — Initialiser (scan dump complet)"]
+        direction LR
+        A1["Entité\navec P279 ?"] -->|oui| B1["wikidata_p279_graph\nsrc_id, dst_id"]
+        A1 --> C1["wikidata_nodes\nsrc → label, P31, dump_pos\ndst → stub id"]
+        A1 --> D1["wikidata_p279_class\nstub id pour chaque P31 du src"]
+        D1 --> E1["Sync class ← nodes\nWHERE label IS NULL"]
+    end
+    subgraph P2["Passe 2 — Compléter (scan dump complet)"]
+        direction LR
+        A2["id = dst_id\ndans p279_graph ?"] -->|oui| B2["wikidata_nodes\nmàj label, P31, dump_pos"]
+        B2 --> C2["wikidata_p279_class\nnouveaux stubs P31 des dst"]
+        D2["id dans\np279_class ?"] -->|label IS NULL| E2["wikidata_p279_class\nmàj label"]
+    end
+    subgraph P3["Passe 3 — Finaliser (scan dump complet)"]
+        A3["id dans p279_class\nlabel IS NULL ?"] -->|oui| B3["wikidata_p279_class\nmàj label"]
+    end
+    subgraph BFS["BFS en base — instantané"]
+        S["Entité de départ"] --> Q["SQL : parcours\nwikidata_p279_graph"]
+        Q --> R["Sous-graphe filtré"]
+        R --> J["JSON"]
+        R --> G["GEXF (Gephi)"]
+    end
+    P1 --> P2 --> P3 --> BFS
+    </pre>
+  </div>
+
+  <h3>Tables impliquées</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Table</th><th>Contenu</th><th>Populée par</th></tr></thead>
+      <tbody>
+        <tr><td><code>wikidata_p279_graph</code></td><td>Toutes les relations P279 du dump (src → dst)</td><td>Passe 1</td></tr>
+        <tr><td><code>wikidata_nodes</code></td><td>Entités src (complets) + dst (stubs → complétés P2)</td><td>Passes 1 + 2</td></tr>
+        <tr><td><code>wikidata_p279_class</code></td><td>Classes P31 des nœuds (label, dump_pos)</td><td>Passes 1 + 2 + 3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Arborescence des classes (SQL récursif)</h3>
+  <p>Remonte la hiérarchie P279 depuis les classes directes (P31) d'une entité. La colonne <code>path</code> donne le chemin du général au particulier.</p>
+  <pre><code>WITH RECURSIVE class_tree AS (
+    -- Classes directes (P31) de l'entité
+    SELECT c.id, c.label, 0 AS depth,
+           CAST(CONCAT(c.id,' (',COALESCE(c.label,'?'),')') AS CHAR(10000)) AS path
+    FROM wikidata_nodes n
+    JOIN wikidata_p279_class c
+      ON FIND_IN_SET(c.id, REPLACE(n.p31, '|', ',')) > 0
+    WHERE n.id = 'Q28640'
+
+    UNION ALL
+
+    -- Superclasses via P279 (remonte la hiérarchie)
+    SELECT g.dst_id, cls.label, ct.depth + 1,
+           CONCAT(g.dst_id,' (',COALESCE(cls.label,'?'),') > ',ct.path)
+    FROM class_tree ct
+    JOIN wikidata_p279_graph g ON g.src_id = ct.id
+    LEFT JOIN wikidata_p279_class cls ON cls.id = g.dst_id
+    WHERE ct.depth &lt; 20           -- limite anti-cycle
+)
+SELECT id, label, depth, path
+FROM class_tree
+ORDER BY path;</code></pre>
+
+  <div class="callout">
+    Le <code>CAST(… AS CHAR(10000))</code> dans l'ancre est indispensable : sans lui MariaDB infère un type trop court et lève <em>Error 1406 Data too long</em> dès que le chemin devient profond.
+  </div>
+
+  <h3>Export GEXF</h3>
+  <p>Le fichier GEXF produit est directement importable dans <a href="https://gephi.org" target="_blank">Gephi</a>. Les nœuds portent un attribut <code>p31</code> (valeurs pipe-séparées) lisible comme métadonnée de partition.</p>
+</section>
+
+<!-- Timeout -->
+<section id="timeout">
+  <h2>Gestion du timeout &amp; reprise</h2>
+  <p>Toutes les fonctions de scan partagent le même pattern de deadline :</p>
+
+  <pre><code>// Calculé depuis REQUEST_TIME, pas depuis time() au lancement du scan,
+// pour rester aligné avec set_time_limit(TIME_LIMIT).
+$deadline = (int)$_SERVER['REQUEST_TIME'] + TIME_LIMIT - 5;
+
+while (true) {
+    if (time() >= $deadline) { $timedOut = true; break; }
+    // ...scan...
+}
+
+if ($timedOut) {
+    saveScanState($key, $reader->getPosition(), $total, $found);
+} else {
+    clearScanState($key);
+}</code></pre>
+
+  <div class="callout warn">
+    Utiliser <code>time() - $start >= TIME_LIMIT</code> est incorrect : il mesure le temps écoulé depuis le début du scan, pas depuis le début de la requête HTTP. Si des opérations préalables ont consommé du temps, PHP tue le script avant que la condition ne soit vraie.
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Scan</th><th>Clé <code>scan_key</code></th><th>Données sauvées</th></tr></thead>
+      <tbody>
+        <tr><td>Recherche</td><td><code>wikidata_search.dump_position</code></td><td>Position byte</td></tr>
+        <tr><td>Propriétés</td><td><em>sans état (rechargement des cibles)</em></td><td>—</td></tr>
+        <tr><td>Géos</td><td><code>geo_P19</code></td><td>Position + compteurs</td></tr>
+        <tr><td>Occupations</td><td><code>occ_P106</code></td><td>Position + compteurs</td></tr>
+        <tr><td>P279 Passe 1</td><td><code>p279_graph</code></td><td>Position + compteurs</td></tr>
+        <tr><td>P279 Passe 2</td><td><code>p279_compl</code></td><td>Position + compteurs</td></tr>
+        <tr><td>P279 Passe 3</td><td><code>p279_final</code></td><td>Position + compteurs</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Schéma BDD -->
+<section id="schema">
+  <h2>Base de données</h2>
+
+  <div class="mermaid-wrap">
+    <pre class="mermaid">
+erDiagram
+    wikidata_search {
+        int id PK
+        varchar query
+        varchar lang
+        varchar p31
+        varchar p279
+        varchar entity_type
+        bigint dump_position
+        datetime created_at
+    }
+    wikidata_entities {
+        varchar id PK
+        varchar label
+        text p31
+        text p279
+        int sitelinks
+        int statements
+        int externalIds
+        bigint dump_line
+        bigint dump_pos
+        datetime exported_at
+    }
+    wikidata_search_entities {
+        int search_id FK
+        varchar entity_id FK
+        varchar matched_in
+    }
+    wikidata_properties {
+        int id PK
+        varchar entity_id FK
+        varchar property
+        varchar value_type
+        varchar value_id
+        text value_str
+        varchar rank
+    }
+    wikidata_geos {
+        varchar id PK
+        varchar label
+        double latitude
+        double longitude
+        double precis
+        varchar globe
+        varchar source_prop
+    }
+    wikidata_occupations {
+        varchar id PK
+        varchar label
+        text subclass_of
+        varchar source_prop
+    }
+    wikidata_p279_graph {
+        varchar src_id PK
+        varchar dst_id PK
+        datetime exported_at
+    }
+    wikidata_p279_class {
+        varchar id PK
+        varchar label
+        bigint dump_line
+        bigint dump_pos
+        datetime updated_at
+    }
+    wikidata_nodes {
+        varchar id PK
+        varchar label
+        text p31
+        bigint dump_line
+        bigint dump_pos
+        datetime updated_at
+    }
+    wikidata_scan_state {
+        varchar scan_key PK
+        bigint dump_position
+        int total_target
+        int found_so_far
+        text frontier_json
+        datetime updated_at
+    }
+
+    wikidata_search ||--o{ wikidata_search_entities : "contient"
+    wikidata_entities ||--o{ wikidata_search_entities : "référencée"
+    wikidata_entities ||--o{ wikidata_properties : "possède"
+    wikidata_p279_graph }o--|| wikidata_nodes : "src"
+    wikidata_p279_graph }o--|| wikidata_nodes : "dst"
+    </pre>
+  </div>
+</section>
+
+<!-- Exports -->
+<section id="exports">
+  <h2>Exports</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Format</th><th>Onglet</th><th>Contenu</th></tr></thead>
+      <tbody>
+        <tr><td>CSV</td><td>Entités</td><td>id, type, label, description, P31, P279, Wikipedia</td></tr>
+        <tr><td>CSV</td><td>Propriétés</td><td>entity_id, property, value_type, value_id, value_str, rank</td></tr>
+        <tr><td>CSV</td><td>Géos</td><td>id, label, latitude, longitude, précision, globe</td></tr>
+        <tr><td>CSV</td><td>Occupations</td><td>id, label, subclass_of</td></tr>
+        <tr><td>JSON</td><td>Réseau P279</td><td><code>{ nodes: [{id,label,p31,dump_line}], links: [{idSrc,idDst}] }</code></td></tr>
+        <tr><td>GEXF</td><td>Réseau P279</td><td>Format Gephi — attribut <code>p31</code> sur les nœuds, arêtes dirigées</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Constantes -->
+<section id="config">
+  <h2>Constantes &amp; configuration</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Constante</th><th>Valeur</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>TIME_LIMIT</code></td><td>10 800 s (3 h)</td><td>Limite PHP par requête HTTP — aligne deadline et <code>set_time_limit</code></td></tr>
+        <tr><td><code>MAX_RESULTS</code></td><td>200</td><td>Résultats max par recherche (overridable par <code>NO_LIMIT</code>)</td></tr>
+        <tr><td><code>DUMP_FILE</code></td><td><code>wikidata-20240101-all.json.gz</code></td><td>Chemin absolu du dump depuis la racine du projet</td></tr>
+        <tr><td><code>PREF_LANG</code></td><td><code>['fr','en']</code></td><td>Langues préférées pour l'extraction des labels (ordre prioritaire)</td></tr>
+        <tr><td><code>NO_LIMIT</code></td><td><code>PHP_INT_MAX</code></td><td>Utilisé pour les exports sans limite de résultats</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>config.php</h3>
+  <pre><code>&lt;?php
+return [
+    'host'    => '127.0.0.1',
+    'port'    => 3306,
+    'dbname'  => 'wikidata',
+    'user'    => '...',
+    'pass'    => '...',
+    'charset' => 'utf8mb4',
+];</code></pre>
+  <div class="callout warn">
+    <code>config.php</code> contient les credentials en clair — il est exclu du dépôt (<code>.gitignore</code>).
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+// Highlight active nav link on scroll
+const links = document.querySelectorAll('.nav-link');
+const sections = document.querySelectorAll('section[id]');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
